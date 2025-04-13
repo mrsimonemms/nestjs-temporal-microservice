@@ -1,0 +1,19 @@
+{
+  "template": "https://github.com/mrsimonemms/new",
+  "commit": "da19260a4de21b166bdcab7a1331ad4b40a16729",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "project_name": "nestjs-temporal-microservice",
+      "description": "Build NestJS microservices with Temporal as your transporter",
+      "author": "Simon Emms <simon@simonemms.com>",
+      "type": "blank",
+      "_template": "https://github.com/mrsimonemms/new",
+      "_commit": "da19260a4de21b166bdcab7a1331ad4b40a16729"
+    }
+  },
+  "directory": "js",
+  "skip": [
+    ".git"
+  ]
+}
