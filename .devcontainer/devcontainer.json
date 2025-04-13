@@ -1,7 +1,9 @@
 {
   "image": "ghcr.io/mrsimonemms/devcontainers/full",
   "name": "devcontainer",
-  "features": {},
+  "features": {
+    "ghcr.io/devcontainers-extra/features/temporal-cli:1": {}
+  },
   "customizations": {
     "vscode": {
       "extensions": [
@@ -9,5 +11,8 @@
       ],
       "settings": {}
     }
+  },
+  "containerEnv": {
+    "TEMPORAL_ADDRESS": "localhost:7233"
   }
 }

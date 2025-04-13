@@ -1,17 +1,21 @@
 {
-  "name": "nestjs-temporal-microservice",
+  "name": "@mrsimonemms/nestjs-temporal-microservice",
   "version": "0.0.0",
   "description": "Build NestJS microservices with Temporal as your transporter",
   "author": "Simon Emms <simon@simonemms.com>",
-  "private": true,
   "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "format": "prettier --write \"**/*.?(c|m){j,t}s\"",
     "lint": "eslint \"**/*.?(c|m)ts\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@nestjs/microservices": "^11.0.16",
+    "@temporalio/client": "^1.11.7"
+  },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "^5.2.2",
     "@types/node": "^22.14.1",
