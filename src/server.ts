@@ -14,25 +14,34 @@
  * limitations under the License.
  */
 import { CustomTransportStrategy, Server } from '@nestjs/microservices';
-import { Connection, Client as TemporalClient } from '@temporalio/client';
+import { NativeConnection, Worker } from '@temporalio/worker';
 
-import { IServerConnectionOpts } from './interfaces';
+import { IServerConnectionOpts, IServerUnwrap } from './interfaces';
 
 export class TemporalPubSubServer
   extends Server
   implements CustomTransportStrategy
 {
-  private client?: TemporalClient;
+  private connection?: NativeConnection;
 
-  constructor(private readonly opts: IServerConnectionOpts = {}) {
+  private worker?: Worker;
+
+  constructor(private readonly opts: IServerConnectionOpts) {
     super();
+  }
+
+  private loggerDebug(message: string, ...optionalParams: unknown[]) {
+    if (this.logger.debug) {
+      this.logger.debug(message, ...optionalParams);
+    }
   }
 
   /**
    * Triggered on application shutdown, if shutdown hooks are enabled
    */
   async close(): Promise<void> {
-    await this.client?.connection.close();
+    this.loggerDebug('Closing Temporal connection');
+    return this.connection?.close();
   }
 
   /**
@@ -42,14 +51,17 @@ export class TemporalPubSubServer
     callback: (err?: unknown, ...optionalParams: unknown[]) => void,
   ): Promise<void> {
     try {
-      const connection = await Connection.connect(this.opts?.connection);
+      this.logger.log('Connecting to Temporal');
+      this.connection = await NativeConnection.connect(this.opts.connection);
 
-      this.client = new TemporalClient({
-        // Order is important to ensure that the connection is always from the constructor
-        ...this.opts.client,
-        connection,
+      this.loggerDebug('Creating Temporal Worker');
+      this.worker = await Worker.create({
+        ...this.opts.worker,
+        connection: this.connection,
       });
 
+      this.loggerDebug('Running Temporal Worker');
+      await this.worker.run();
       callback();
     } catch (err) {
       callback(err);
@@ -70,12 +82,12 @@ export class TemporalPubSubServer
    * to be able to retrieve the underlying native server. Most custom implementations
    * will not need this.
    */
-  unwrap<T = TemporalClient>(): T {
-    if (!this.client) {
+  unwrap<T = IServerUnwrap>(): T {
+    if (!this.connection || !this.worker) {
       throw new Error(
-        'Not initialized. Please call the "listen"/"startAllMicroservices" method before accessing the server.',
+        'Not initialized. Please call the "connect" method first.',
       );
     }
-    return this.client as T;
+    return { connection: this.connection, worker: this.worker } as T;
   }
 }

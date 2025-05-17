@@ -22,19 +22,19 @@ import {
   WorkerOptions,
 } from '@temporalio/worker';
 
-export interface IServerConnectionOpts {
+export interface IClientConnectionOpts {
   // Options on the client such as namespace
   client?: Partial<Omit<ClientOptions, 'connection'>>;
   // Options for the connection factory
   connection?: ConnectionOptions;
 }
 
-export interface IClientConnectionOpts {
+export interface IServerConnectionOpts {
   connection?: NativeConnectionOptions;
   worker: WorkerOptions;
 }
 
-export interface IClientUnwrap {
+export interface IServerUnwrap {
   connection: NativeConnection;
   worker: Worker;
 }

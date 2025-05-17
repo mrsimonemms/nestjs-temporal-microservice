@@ -29,6 +29,9 @@ async function bootstrap() {
       connection: {
         address: process.env.TEMPORAL_ADDRESS,
       },
+      worker: {
+        taskQueue: 'math',
+      },
     }),
   });
 

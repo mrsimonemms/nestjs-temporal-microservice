@@ -15,38 +15,32 @@
  */
 import { Logger } from '@nestjs/common';
 import { ClientProxy, ReadPacket, WritePacket } from '@nestjs/microservices';
-import { NativeConnection, Worker } from '@temporalio/worker';
+import { Connection, Client as TemporalClient } from '@temporalio/client';
 
-import { IClientConnectionOpts, IClientUnwrap } from './interfaces';
+import { IClientConnectionOpts } from './interfaces';
 
 export class TemporalPubSubClient extends ClientProxy {
-  private connection?: NativeConnection;
-
-  private worker?: Worker;
+  private client?: TemporalClient;
 
   private readonly logger = new Logger(this.constructor.name);
 
-  constructor(private readonly opts: IClientConnectionOpts) {
+  constructor(private readonly opts: IClientConnectionOpts = {}) {
     super();
   }
 
   async connect(): Promise<any> {
-    this.logger.debug('Connecting to Temporal');
-    this.connection = await NativeConnection.connect(this.opts.connection);
+    const connection = await Connection.connect(this.opts?.connection);
 
-    this.logger.debug('Creating Temporal Worker');
-    this.worker = await Worker.create({
-      ...this.opts.worker,
-      connection: this.connection,
+    this.client = new TemporalClient({
+      // Order is important to ensure that the connection is always from the constructor
+      ...this.opts.client,
+      connection,
     });
-
-    this.logger.debug('Running Temporal Worker');
-    await this.worker.run();
   }
 
-  close() {
+  async close(): Promise<void> {
     this.logger.debug('Closing Temporal connection');
-    return this.connection?.close();
+    await this.client?.connection.close();
   }
 
   async dispatchEvent(packet: ReadPacket<any>): Promise<any> {
@@ -73,12 +67,12 @@ export class TemporalPubSubClient extends ClientProxy {
     return () => console.log('teardown');
   }
 
-  unwrap<T = IClientUnwrap>(): T {
-    if (!this.connection || !this.worker) {
+  unwrap<T = TemporalClient>(): T {
+    if (!this.client) {
       throw new Error(
-        'Not initialized. Please call the "connect" method first.',
+        'Not initialized. Please call the "listen"/"startAllMicroservices" method before accessing the server.',
       );
     }
-    return { connection: this.connection, worker: this.worker } as T;
+    return this.client as T;
   }
 }
