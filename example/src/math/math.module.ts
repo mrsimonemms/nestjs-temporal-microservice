@@ -16,15 +16,26 @@
 import { Module } from '@nestjs/common';
 import { ClientsModule } from '@nestjs/microservices';
 
+import { IClientConnectionOpts, TemporalPubSubClient } from '../../../src';
 import { MATH_SERVICE } from './math.constants';
 import { MathController } from './math.controller';
+
+const opts: IClientConnectionOpts = {
+  connection: {
+    address: process.env.TEMPORAL_ADDRESS,
+  },
+  worker: {
+    taskQueue: 'math',
+  },
+};
 
 @Module({
   imports: [
     ClientsModule.register([
       {
         name: MATH_SERVICE,
-        // transport: Transport.KAFKA,
+        customClass: TemporalPubSubClient,
+        options: opts,
       },
     ]),
   ],

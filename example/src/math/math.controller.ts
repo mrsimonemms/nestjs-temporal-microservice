@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { Controller, Get, Inject } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
+import { ClientProxy, MessagePattern } from '@nestjs/microservices';
 
 import { MATH_SERVICE } from './math.constants';
 
@@ -25,13 +25,15 @@ export class MathController {
 
   @Get()
   execute() {
-    const pattern = { cmd: 'sum' };
+    const pattern = 'sum';
     const data = [1, 2, 3, 4, 5];
 
     return this.client.send(pattern, data);
   }
 
+  @MessagePattern('sum')
   sum(data: number[]): number {
+    console.log('sum');
     return (data || []).reduce((a, b) => a + b);
   }
 }

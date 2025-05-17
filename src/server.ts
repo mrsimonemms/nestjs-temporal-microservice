@@ -13,50 +13,47 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {
-  ClientOptions,
-  CustomTransportStrategy,
-  Server,
-} from '@nestjs/microservices';
-import { Client, Connection, ConnectionOptions } from '@temporalio/client';
+import { CustomTransportStrategy, Server } from '@nestjs/microservices';
+import { Connection, Client as TemporalClient } from '@temporalio/client';
 
-export interface IConnectionOpts {
-  // Options on the client such as namespace
-  client?: Partial<Omit<ClientOptions, 'connection'>>;
-  // Options for the connection factory
-  connection?: ConnectionOptions;
-}
+import { IServerConnectionOpts } from './interfaces';
 
 export class TemporalPubSubServer
   extends Server
   implements CustomTransportStrategy
 {
-  private client?: Client;
+  private client?: TemporalClient;
 
-  constructor(private opts: IConnectionOpts = {}) {
+  constructor(private readonly opts: IServerConnectionOpts = {}) {
     super();
   }
 
   /**
-   * Triggered on application shutdown.
+   * Triggered on application shutdown, if shutdown hooks are enabled
    */
   async close(): Promise<void> {
     await this.client?.connection.close();
   }
 
   /**
-   * Triggered when you run "app.listen()".
+   * Triggered when the microservices are started
    */
-  async listen(callback: () => void): Promise<void> {
-    const connection = await Connection.connect(this.opts?.connection);
+  async listen(
+    callback: (err?: unknown, ...optionalParams: unknown[]) => void,
+  ): Promise<void> {
+    try {
+      const connection = await Connection.connect(this.opts?.connection);
 
-    this.client = new Client({
-      // Order is important to ensure that the connection is always from the constructor
-      ...this.opts.client,
-      connection,
-    });
+      this.client = new TemporalClient({
+        // Order is important to ensure that the connection is always from the constructor
+        ...this.opts.client,
+        connection,
+      });
 
-    callback();
+      callback();
+    } catch (err) {
+      callback(err);
+    }
   }
 
   /**
@@ -64,13 +61,8 @@ export class TemporalPubSubServer
    * to be able to register event listeners. Most custom implementations
    * will not need this.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-  on(event: string, callback: Function) {
-    console.log({
-      event,
-      callback,
-    });
-    throw new Error('Method not implemented.');
+  on() {
+    throw new Error('Method is not supported for Temporal server');
   }
 
   /**
@@ -78,7 +70,12 @@ export class TemporalPubSubServer
    * to be able to retrieve the underlying native server. Most custom implementations
    * will not need this.
    */
-  unwrap<T = never>(): T {
-    throw new Error('Method not implemented.');
+  unwrap<T = TemporalClient>(): T {
+    if (!this.client) {
+      throw new Error(
+        'Not initialized. Please call the "listen"/"startAllMicroservices" method before accessing the server.',
+      );
+    }
+    return this.client as T;
   }
 }

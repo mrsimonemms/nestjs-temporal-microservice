@@ -13,11 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions } from '@nestjs/microservices';
 
 import { TemporalPubSubServer } from '../../src/index';
 import { AppModule } from './app.module';
+
+const logger = new Logger('bootstrap');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -29,12 +32,13 @@ async function bootstrap() {
     }),
   });
 
+  app.enableShutdownHooks();
+
   await app.startAllMicroservices();
-  await app.listen(3000);
-  console.log(`Application is running on: ${await app.getUrl()}`);
+  await app.listen(process.env.SERVER_PORT ?? 3000);
+  logger.log(`Application is running on: ${await app.getUrl()}`);
 }
 
 bootstrap().catch((err: Error) => {
-  console.log(err.stack);
-  process.exit(1);
+  logger.fatal(err.stack);
 });
