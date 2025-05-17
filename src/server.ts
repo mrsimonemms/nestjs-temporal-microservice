@@ -13,50 +13,58 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {
-  ClientOptions,
-  CustomTransportStrategy,
-  Server,
-} from '@nestjs/microservices';
-import { Client, Connection, ConnectionOptions } from '@temporalio/client';
+import { CustomTransportStrategy, Server } from '@nestjs/microservices';
+import { NativeConnection, Worker } from '@temporalio/worker';
 
-export interface IConnectionOpts {
-  // Options on the client such as namespace
-  client?: Partial<Omit<ClientOptions, 'connection'>>;
-  // Options for the connection factory
-  connection?: ConnectionOptions;
-}
+import { IServerConnectionOpts, IServerUnwrap } from './interfaces';
 
 export class TemporalPubSubServer
   extends Server
   implements CustomTransportStrategy
 {
-  private client?: Client;
+  private connection?: NativeConnection;
 
-  constructor(private opts: IConnectionOpts = {}) {
+  private worker?: Worker;
+
+  constructor(private readonly opts: IServerConnectionOpts) {
     super();
   }
 
-  /**
-   * Triggered on application shutdown.
-   */
-  async close(): Promise<void> {
-    await this.client?.connection.close();
+  private loggerDebug(message: string, ...optionalParams: unknown[]) {
+    if (this.logger.debug) {
+      this.logger.debug(message, ...optionalParams);
+    }
   }
 
   /**
-   * Triggered when you run "app.listen()".
+   * Triggered on application shutdown, if shutdown hooks are enabled
    */
-  async listen(callback: () => void): Promise<void> {
-    const connection = await Connection.connect(this.opts?.connection);
+  async close(): Promise<void> {
+    this.loggerDebug('Closing Temporal connection');
+    return this.connection?.close();
+  }
 
-    this.client = new Client({
-      // Order is important to ensure that the connection is always from the constructor
-      ...this.opts.client,
-      connection,
-    });
+  /**
+   * Triggered when the microservices are started
+   */
+  async listen(
+    callback: (err?: unknown, ...optionalParams: unknown[]) => void,
+  ): Promise<void> {
+    try {
+      this.logger.log('Connecting to Temporal');
+      this.connection = await NativeConnection.connect(this.opts.connection);
 
-    callback();
+      this.worker = await Worker.create({
+        ...this.opts.worker,
+        connection: this.connection,
+      });
+
+      this.loggerDebug('Running Temporal Worker');
+      await this.worker.run();
+      callback();
+    } catch (err) {
+      callback(err);
+    }
   }
 
   /**
@@ -64,13 +72,8 @@ export class TemporalPubSubServer
    * to be able to register event listeners. Most custom implementations
    * will not need this.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-  on(event: string, callback: Function) {
-    console.log({
-      event,
-      callback,
-    });
-    throw new Error('Method not implemented.');
+  on() {
+    throw new Error('Method is not supported for Temporal server');
   }
 
   /**
@@ -78,7 +81,12 @@ export class TemporalPubSubServer
    * to be able to retrieve the underlying native server. Most custom implementations
    * will not need this.
    */
-  unwrap<T = never>(): T {
-    throw new Error('Method not implemented.');
+  unwrap<T = IServerUnwrap>(): T {
+    if (!this.connection || !this.worker) {
+      throw new Error(
+        'Not initialized. Please call the "connect" method first.',
+      );
+    }
+    return { connection: this.connection, worker: this.worker } as T;
   }
 }

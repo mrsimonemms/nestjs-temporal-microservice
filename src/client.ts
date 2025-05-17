@@ -13,17 +13,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { Logger } from '@nestjs/common';
 import { ClientProxy, ReadPacket, WritePacket } from '@nestjs/microservices';
+import { Connection, Client as TemporalClient } from '@temporalio/client';
+
+import { IClientConnectionOpts } from './interfaces';
 
 export class TemporalPubSubClient extends ClientProxy {
-  async connect(): Promise<any> {
-    await Promise.resolve();
-    console.log('connect');
+  private client?: TemporalClient;
+
+  private readonly logger = new Logger(this.constructor.name);
+
+  constructor(private readonly opts: IClientConnectionOpts = {}) {
+    super();
   }
 
-  async close() {
-    await Promise.resolve();
-    console.log('close');
+  async connect(): Promise<any> {
+    const connection = await Connection.connect(this.opts?.connection);
+
+    this.client = new TemporalClient({
+      // Order is important to ensure that the connection is always from the constructor
+      ...this.opts.client,
+      connection,
+    });
+  }
+
+  async close(): Promise<void> {
+    this.logger.debug('Closing Temporal connection');
+    await this.client?.connection.close();
   }
 
   async dispatchEvent(packet: ReadPacket<any>): Promise<any> {
@@ -35,19 +52,36 @@ export class TemporalPubSubClient extends ClientProxy {
     packet: ReadPacket<unknown>,
     callback: (packet: WritePacket<unknown>) => void,
   ): () => void {
+    if (!this.client) {
+      throw new Error(
+        'Not initialized. Please call the "listen"/"startAllMicroservices" method before accessing the server.',
+      );
+    }
+    // this.client.workflow.start();
     console.log('message:', packet);
 
     // In a real-world application, the "callback" function should be executed
     // with payload sent back from the responder. Here, we'll simply simulate (5 seconds delay)
     // that response came through by passing the same "data" as we've originally passed in.
-    setTimeout(() => callback({ response: packet.data }), 5000);
+    setTimeout(() => {
+      console.log('end of timeout');
+      callback({
+        response: packet.data,
+        isDisposed: true,
+      });
+    }, 5000);
 
-    console.log(callback);
+    console.log('start of timeout');
 
     return () => console.log('teardown');
   }
 
-  unwrap<T = never>(): T {
-    throw new Error('Method not implemented.');
+  unwrap<T = TemporalClient>(): T {
+    if (!this.client) {
+      throw new Error(
+        'Not initialized. Please call the "listen"/"startAllMicroservices" method before accessing the server.',
+      );
+    }
+    return this.client as T;
   }
 }

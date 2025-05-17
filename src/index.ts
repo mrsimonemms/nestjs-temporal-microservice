@@ -13,6 +13,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { Logger } from '@nestjs/common';
+import { DefaultLogger, Runtime } from '@temporalio/worker';
 
 export * from './client';
+export * from './interfaces';
 export * from './server';
+
+// Set to trace level to let the NestJS logger handle log output
+// "INFO" level can be a bit chatty so gets sent to debug
+const logger = new DefaultLogger('TRACE', ({ level, message, meta }) => {
+  const l = new Logger('temporal');
+
+  switch (level) {
+    case 'WARN':
+      l.warn(message, meta);
+      break;
+    case 'ERROR':
+      l.error(message, meta);
+      break;
+    case 'TRACE':
+      l.verbose(message, meta);
+      break;
+    default:
+      l.debug(message, meta);
+      break;
+  }
+});
+
+Runtime.install({
+  logger,
+});
