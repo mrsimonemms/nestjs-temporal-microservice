@@ -15,9 +15,15 @@
  */
 import { Logger } from '@nestjs/common';
 import { ClientProxy, ReadPacket, WritePacket } from '@nestjs/microservices';
-import { Connection, Client as TemporalClient } from '@temporalio/client';
+import {
+  Connection,
+  Client as TemporalClient,
+  Workflow,
+  WorkflowHandleWithFirstExecutionRunId,
+} from '@temporalio/client';
+import { v4 as uuid } from 'uuid';
 
-import { IClientConnectionOpts } from './interfaces';
+import { IClientConnectionOpts, ITemporalPacketData } from './interfaces';
 
 export class TemporalPubSubClient extends ClientProxy {
   private client?: TemporalClient;
@@ -43,11 +49,14 @@ export class TemporalPubSubClient extends ClientProxy {
     await this.client?.connection.close();
   }
 
+  // Dispatch triggers a Temporal workflow and doesn't wait for the response.
+  // This returns the workflow ID only
   async dispatchEvent(packet: ReadPacket<any>): Promise<any> {
     await Promise.resolve();
     return console.log('event to dispatch: ', packet);
   }
 
+  // Publish triggers a Temporal workflow and waits for the response
   publish(
     packet: ReadPacket<unknown>,
     callback: (packet: WritePacket<unknown>) => void,
@@ -57,23 +66,55 @@ export class TemporalPubSubClient extends ClientProxy {
         'Not initialized. Please call the "listen"/"startAllMicroservices" method before accessing the server.',
       );
     }
-    // this.client.workflow.start();
-    console.log('message:', packet);
 
-    // In a real-world application, the "callback" function should be executed
-    // with payload sent back from the responder. Here, we'll simply simulate (5 seconds delay)
-    // that response came through by passing the same "data" as we've originally passed in.
-    setTimeout(() => {
-      console.log('end of timeout');
-      callback({
-        response: packet.data,
-        isDisposed: true,
+    // ITemporalPacketData shouldn't be a Partial, but need to ensure that we have the right data
+    const {
+      taskQueue,
+      workflowType,
+      workflowId = `${taskQueue}_${uuid()}`,
+    } = packet.pattern as Partial<ITemporalPacketData>;
+
+    if (!workflowType) {
+      throw new Error(
+        'workflowType is a required field for a Temporal microservice',
+      );
+    }
+    if (!taskQueue) {
+      throw new Error(
+        'taskQueue is a required field for a Temporal microservice',
+      );
+    }
+
+    this.logger.debug('Starting Temporal microservice workflow', {
+      workflowId,
+      taskQueue,
+      workflowType,
+    });
+    this.client.workflow
+      .start(workflowType, {
+        taskQueue,
+        workflowId,
+      })
+      .then((handler: WorkflowHandleWithFirstExecutionRunId<Workflow>) => {
+        this.logger.debug('Temporal workflow started', { workflowId });
+
+        return handler.result();
+      })
+      .then((response: unknown) => {
+        this.logger.debug('Temporal workflow resolved', { workflowId });
+        callback({
+          response,
+          isDisposed: true,
+        });
+      })
+      .catch((err: Error) => {
+        this.logger.error('Temporal error', { err, workflowId });
+        callback({ err });
       });
-    }, 5000);
 
-    console.log('start of timeout');
-
-    return () => console.log('teardown');
+    return () => {
+      this.logger.debug('Tearing down Temporal microservice');
+    };
   }
 
   unwrap<T = TemporalClient>(): T {
