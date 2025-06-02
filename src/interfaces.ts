@@ -29,18 +29,22 @@ export interface IClientConnectionOpts {
   connection?: ConnectionOptions;
 }
 
-export interface ITemporalPacketData {
+export interface ITemporalPattern {
   taskQueue: string;
-  workflowId?: string;
   workflowType: string;
+}
+
+export interface ITemporalPacketData extends ITemporalPattern {
+  workflowId?: string;
 }
 
 export interface IServerConnectionOpts {
   connection?: NativeConnectionOptions;
+  namespace?: string;
   worker: WorkerOptions;
 }
 
 export interface IServerUnwrap {
   connection: NativeConnection;
-  worker: Worker;
+  workers: Map<string, Worker>;
 }

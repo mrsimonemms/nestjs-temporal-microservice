@@ -16,7 +16,11 @@
 import { CustomTransportStrategy, Server } from '@nestjs/microservices';
 import { NativeConnection, Worker } from '@temporalio/worker';
 
-import { IServerConnectionOpts, IServerUnwrap } from './interfaces';
+import {
+  IServerConnectionOpts,
+  IServerUnwrap,
+  ITemporalPattern,
+} from './interfaces';
 
 export class TemporalPubSubServer
   extends Server
@@ -24,10 +28,53 @@ export class TemporalPubSubServer
 {
   private connection?: NativeConnection;
 
-  private worker?: Worker;
+  private workers: Map<string, Worker> = new Map<string, Worker>();
 
   constructor(private readonly opts: IServerConnectionOpts) {
     super();
+  }
+
+  private async start(): Promise<void> {
+    for (const [key, handler] of this.getHandlers().entries()) {
+      let isValid = false;
+      let workflowType: string = '';
+      let taskQueue: string = '';
+      try {
+        const pattern = JSON.parse(key) as ITemporalPattern;
+        if (pattern.workflowType && pattern.taskQueue) {
+          workflowType = pattern.workflowType;
+          taskQueue = pattern.taskQueue;
+          isValid = true;
+        }
+      } catch {
+        isValid = false;
+      }
+      if (!isValid) {
+        throw new Error(
+          'Temporal microservice requires a workflowType and taskQueue in the pattern',
+        );
+      }
+
+      const workerName = `${workflowType}.${taskQueue}`;
+
+      const worker = await Worker.create({
+        connection: this.connection,
+        namespace: this.opts.namespace ?? 'default',
+        taskQueue,
+        workflowsPath: require.resolve('./workflow'),
+        activities: {
+          handler,
+        },
+      });
+
+      console.log(handler);
+
+      this.logger.debug?.('Running worker', { workerName });
+      // await worker.run();
+
+      // Store in case we want to unwrap
+      this.workers.set(workerName, worker);
+    }
   }
 
   /**
@@ -54,13 +101,15 @@ export class TemporalPubSubServer
       this.logger.log('Connecting to Temporal');
       this.connection = await NativeConnection.connect(this.opts.connection);
 
-      this.worker = await Worker.create({
-        ...this.opts.worker,
-        connection: this.connection,
-      });
+      await this.start();
 
-      this.logger.debug?.('Running Temporal Worker');
-      await this.worker.run();
+      // this.worker = await Worker.create({
+      //   ...this.opts.worker,
+      //   connection: this.connection,
+      // });
+
+      // this.logger.debug?.('Running Temporal Worker');
+      // await this.worker.run();
       callback();
     } catch (err) {
       callback(err);
@@ -82,11 +131,11 @@ export class TemporalPubSubServer
    * will not need this.
    */
   unwrap<T = IServerUnwrap>(): T {
-    if (!this.connection || !this.worker) {
+    if (!this.connection || !this.workers) {
       throw new Error(
         'Not initialized. Please call the "connect" method first.',
       );
     }
-    return { connection: this.connection, worker: this.worker } as T;
+    return { connection: this.connection, workers: this.workers } as T;
   }
 }
