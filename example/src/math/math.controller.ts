@@ -16,7 +16,7 @@
 import { Controller, Get, Inject } from '@nestjs/common';
 import { ClientProxy, MessagePattern } from '@nestjs/microservices';
 
-import { ITemporalPacketData } from '../../../src';
+import { ITemporalPacketData, ITemporalPattern } from '../../../src';
 import { MATH_SERVICE } from './math.constants';
 
 @Controller()
@@ -35,7 +35,10 @@ export class MathController {
     return this.client.send(pattern, data);
   }
 
-  @MessagePattern('sum')
+  @MessagePattern<ITemporalPattern>({
+    taskQueue: 'sum',
+    workflowType: 'math',
+  })
   sum(data: number[]): number {
     console.log('sum');
     return (data || []).reduce((a, b) => a + b);
