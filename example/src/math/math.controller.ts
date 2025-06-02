@@ -16,6 +16,7 @@
 import { Controller, Get, Inject } from '@nestjs/common';
 import { ClientProxy, MessagePattern } from '@nestjs/microservices';
 
+import { ITemporalPacketData } from '../../../src';
 import { MATH_SERVICE } from './math.constants';
 
 @Controller()
@@ -25,8 +26,11 @@ export class MathController {
 
   @Get()
   execute() {
-    const pattern = 'sum';
-    const data = [1, 2, 3, 4, 5];
+    const pattern: ITemporalPacketData = {
+      taskQueue: 'sum',
+      workflowType: 'math',
+    };
+    const data = [1, 2, 3, 4, 5, 6];
 
     return this.client.send(pattern, data);
   }

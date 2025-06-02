@@ -15,11 +15,13 @@
   "dependencies": {
     "@nestjs/microservices": "^11.0.16",
     "@temporalio/client": "^1.11.7",
-    "@temporalio/worker": "^1.11.8"
+    "@temporalio/worker": "^1.11.8",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "^5.2.2",
     "@types/node": "^22.14.1",
+    "@types/uuid": "^10.0.0",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-prettier": "^5.1.3",

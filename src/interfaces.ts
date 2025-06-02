@@ -29,6 +29,12 @@ export interface IClientConnectionOpts {
   connection?: ConnectionOptions;
 }
 
+export interface ITemporalPacketData {
+  taskQueue: string;
+  workflowId?: string;
+  workflowType: string;
+}
+
 export interface IServerConnectionOpts {
   connection?: NativeConnectionOptions;
   worker: WorkerOptions;
