@@ -13,8 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { CustomTransportStrategy, Server } from '@nestjs/microservices';
+import {
+  CustomTransportStrategy,
+  MessageHandler,
+  Server,
+} from '@nestjs/microservices';
 import { NativeConnection, Worker } from '@temporalio/worker';
+import { fork } from 'node:child_process';
+import { join } from 'node:path';
 
 import {
   IServerConnectionOpts,
@@ -34,46 +40,86 @@ export class TemporalPubSubServer
     super();
   }
 
+  private async createWorker(
+    key: string,
+    handler: MessageHandler,
+  ): Promise<void> {
+    let isValid = false;
+    let workflowType: string = '';
+    let taskQueue: string = '';
+    try {
+      const pattern = JSON.parse(key) as ITemporalPattern;
+      if (pattern.workflowType && pattern.taskQueue) {
+        workflowType = pattern.workflowType;
+        taskQueue = pattern.taskQueue;
+        isValid = true;
+      }
+    } catch {
+      isValid = false;
+    }
+    if (!isValid) {
+      throw new Error(
+        'Temporal microservice requires a workflowType and taskQueue in the pattern',
+      );
+    }
+
+    await Promise.resolve();
+
+    const workerName = `${workflowType}.${taskQueue}`;
+
+    console.log(handler);
+
+    console.log(__filename);
+
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    const child = fork(join(__dirname, 'fork'), { signal });
+
+    console.log(child);
+
+    child
+      .on('error', (err: Error) => {
+        console.log(err);
+      })
+      .on(
+        'exit',
+        (code: number | null, signal: NodeJS.Signals | null): void => {
+          console.log({
+            code,
+            signal,
+          });
+          console.log('222');
+        },
+      );
+
+    // const worker = await Worker.create({
+    //   connection: this.connection,
+    //   namespace: this.opts.namespace ?? 'default',
+    //   taskQueue,
+    //   workflowsPath: require.resolve('./workflow'),
+    //   activities: {
+    //     handler,
+    //   },
+    // });
+
+    // console.log(worker);
+
+    this.logger.debug?.('Running worker', { workerName });
+    // await worker.run();
+  }
+
   private async start(): Promise<void> {
     for (const [key, handler] of this.getHandlers().entries()) {
-      let isValid = false;
-      let workflowType: string = '';
-      let taskQueue: string = '';
-      try {
-        const pattern = JSON.parse(key) as ITemporalPattern;
-        if (pattern.workflowType && pattern.taskQueue) {
-          workflowType = pattern.workflowType;
-          taskQueue = pattern.taskQueue;
-          isValid = true;
-        }
-      } catch {
-        isValid = false;
-      }
-      if (!isValid) {
-        throw new Error(
-          'Temporal microservice requires a workflowType and taskQueue in the pattern',
-        );
-      }
+      await this.createWorker(key, handler);
 
-      const workerName = `${workflowType}.${taskQueue}`;
+      // console.log({
+      //   workerName,
+      //   worker,
+      // });
 
-      const worker = await Worker.create({
-        connection: this.connection,
-        namespace: this.opts.namespace ?? 'default',
-        taskQueue,
-        workflowsPath: require.resolve('./workflow'),
-        activities: {
-          handler,
-        },
-      });
-
-      console.log(handler);
-
-      this.logger.debug?.('Running worker', { workerName });
-      // await worker.run();
-
-      // Store in case we want to unwrap
-      this.workers.set(workerName, worker);
+      // // Store in case we want to unwrap
+      // // this.workers.set(workerName, worker);
     }
   }
 
